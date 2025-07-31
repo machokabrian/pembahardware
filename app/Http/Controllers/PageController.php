@@ -7,11 +7,12 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class PageController extends Controller
 {
     /**
-     * Display the homepage with categories and featured products.
+     * Display the homepage with categories and paginated featured products.
      *
      * @param Request $request
      * @return \Illuminate\View\View
@@ -26,29 +27,62 @@ class PageController extends Controller
                     ->get();
             });
 
-            // Get the selected category from query string
+            // Read and validate category filter
             $categoryFilter = $request->query('category');
+            if ($categoryFilter) {
+                if (!is_numeric($categoryFilter)) {
+                    abort(400, 'Invalid category filter.');
+                }
 
-            // Prepare query for featured products
+                $categoryExists = Category::where('is_active', 1)
+                    ->where('id', $categoryFilter)
+                    ->exists();
+
+                if (!$categoryExists) {
+                    abort(404, 'Category not found.');
+                }
+            }
+
+            // Build featured product query
             $featuredQuery = Product::where('is_featured', 1)
                 ->where('is_active', 1)
                 ->orderBy('created_at', 'desc');
 
-            // Apply category filter if set
+            // Apply category filter
             if ($categoryFilter) {
-                $featuredQuery->where('category', $categoryFilter);
+                $featuredQuery->where('category_id', $categoryFilter);
             }
 
             // Paginate featured products (6 per page)
-            $featuredProducts = $featuredQuery->paginate(6)->withQueryString();
+            $featuredProducts = $featuredQuery
+                ->paginate(6)
+                ->withQueryString();
+
+            // Gracefully handle out-of-range pagination (e.g. ?page=999)
+            if ($featuredProducts->isEmpty() && $featuredProducts->currentPage() > 1) {
+                return redirect()->route('home');
+            }
 
             return view('pages.home', compact('categories', 'featuredProducts'));
+
         } catch (\Exception $e) {
-            Log::error('Failed to load homepage data: ' . $e->getMessage());
+            Log::error('Homepage load error: ' . $e->getMessage());
+
+            // Empty paginator fallback
+            $featuredProducts = new LengthAwarePaginator(
+                collect(),        // empty items
+                0,                // total items
+                6,                // per page
+                LengthAwarePaginator::resolveCurrentPage(),
+                [
+                    'path' => request()->url(),
+                    'query' => request()->query(),
+                ]
+            );
 
             return view('pages.home', [
                 'categories' => collect(),
-                'featuredProducts' => collect(),
+                'featuredProducts' => $featuredProducts,
             ]);
         }
     }
@@ -56,7 +90,7 @@ class PageController extends Controller
     /**
      * Handle newsletter subscription.
      *
-     * @param  Request  $request
+     * @param Request $request
      * @return \Illuminate\Http\RedirectResponse
      */
     public function subscribeNewsletter(Request $request)
@@ -66,14 +100,13 @@ class PageController extends Controller
         ]);
 
         try {
-            // TODO: Add subscription logic here (e.g., save to DB or send to mailing service)
+            // TODO: Save email to DB or external service (e.g., Mailchimp)
 
-            // For now, just flash success message
             return back()->with('newsletter_success', 'Thank you for subscribing!');
         } catch (\Exception $e) {
-            Log::error('Newsletter subscription failed: ' . $e->getMessage());
+            Log::error('Newsletter subscription error: ' . $e->getMessage());
 
-            return back()->with('newsletter_error', 'Sorry, we could not process your subscription right now.');
+            return back()->with('newsletter_error', 'Subscription failed. Please try again later.');
         }
     }
 }
