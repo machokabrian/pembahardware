@@ -11,6 +11,6 @@ export default defineConfig({
         tailwindcss(),
     ],
     build: {
-        outDir: 'dist',  // Ensure output directory is 'dist'
+        outDir: 'dist',  // Ensure the build output goes to the 'dist' folder
     },
 });
