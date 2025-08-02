@@ -9,6 +9,7 @@ class Category extends Model
 {
     use HasFactory;
 
+    // Mass assignable attributes
     protected $fillable = [
         'name',
         'slug',
@@ -17,8 +18,24 @@ class Category extends Model
         'is_active',
     ];
 
+    // Casts for specific fields
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * Relationship: A category has many products.
+     */
     public function products()
     {
         return $this->hasMany(Product::class);
+    }
+
+    /**
+     * Scope to get only active categories
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 }
