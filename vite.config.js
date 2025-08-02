@@ -10,4 +10,8 @@ export default defineConfig({
         }),
         tailwindcss(),
     ],
+    build: {
+        // Set the output directory to 'dist' (default for most static site hosts like Vercel)
+        outDir: 'dist',  // Ensure the build output goes into the 'dist' folder
+    },
 });
